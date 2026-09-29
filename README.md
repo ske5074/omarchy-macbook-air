@@ -20,6 +20,9 @@ The script is safe to re-run. It backs up any config file before changing it (`*
   - up: toggle the scratchpad (same as Super+S)
   - down: toggle fullscreen
 - **Function keys**: top row acts as brightness/volume/media keys by default, F1–F12 with Fn (`hid_apple fnmode=1`).
+- **Zen browser hardware video decoding**: the UHD 617 can't decode AV1, so AV1 is disabled and YouTube
+  falls back to VP9, which the GPU decodes. Written to the default profile's `user.js`; restart Zen to apply.
+- **Balanced power profile**: on the 7W i5-8210Y, `performance` mostly adds heat and throttling.
 
 ## Files
 

@@ -89,4 +89,49 @@ else
   echo "set (persists across reboots)"
 fi
 
+# 5. Zen browser: hardware video decoding
+# The UHD 617 decodes H.264/HEVC/VP9 but not AV1, so disable AV1 and YouTube
+# falls back to VP9 on the GPU instead of decoding on the CPU.
+step "Configuring Zen for hardware video decoding"
+zen_dir="$HOME/.config/zen"
+zen_profile=""
+if [[ -f $zen_dir/installs.ini ]]; then
+  zen_profile="$(sed -n 's/^Default=//p' "$zen_dir/installs.ini" | head -1)"
+fi
+if [[ -z $zen_profile && -f $zen_dir/profiles.ini ]]; then
+  zen_profile="$(sed -n 's/^Path=//p' "$zen_dir/profiles.ini" | head -1)"
+fi
+if [[ -z $zen_profile || ! -d $zen_dir/$zen_profile ]]; then
+  echo "no Zen profile found; skipping (open Zen once, then re-run)"
+else
+  user_js="$zen_dir/$zen_profile/user.js"
+  touch "$user_js"
+  added=0
+  for pref in \
+    'user_pref("media.av1.enabled", false);' \
+    'user_pref("media.hardware-video-decoding.force-enabled", true);' \
+    'user_pref("media.ffmpeg.vaapi.enabled", true);'; do
+    if ! grep -qF "$pref" "$user_js"; then
+      echo "$pref" >> "$user_js"
+      added=1
+    fi
+  done
+  if (( added )); then
+    echo "prefs written to $user_js (restart Zen to apply)"
+  else
+    echo "already set"
+  fi
+fi
+
+# 6. Balanced power profile: the 7W i5-8210Y mostly turns 'performance' into heat
+step "Setting power profile to balanced"
+if ! command -v powerprofilesctl &>/dev/null; then
+  echo "power-profiles-daemon not installed; skipping"
+elif [[ $(powerprofilesctl get) == balanced ]]; then
+  echo "already set"
+else
+  powerprofilesctl set balanced
+  echo "set (power-profiles-daemon remembers it across reboots)"
+fi
+
 printf '\nDone.\n'
