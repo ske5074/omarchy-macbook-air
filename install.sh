@@ -134,4 +134,21 @@ else
   echo "set (power-profiles-daemon remembers it across reboots)"
 fi
 
+# 7. cliamp: no visualizer (it was the top CPU user on this 2-core chip)
+step "Turning off the cliamp visualizer"
+cliamp_conf="$HOME/.config/cliamp/config.toml"
+if [[ -f $cliamp_conf ]] && grep -q '^visualizer = "None"' "$cliamp_conf"; then
+  echo "already set"
+else
+  mkdir -p "$(dirname "$cliamp_conf")"
+  touch "$cliamp_conf"
+  cp "$cliamp_conf" "$cliamp_conf.bak.$stamp"
+  # Top-level key, so it must come before any [section]; drop an old value first.
+  { echo 'visualizer = "None"'; grep -v '^visualizer *=' "$cliamp_conf.bak.$stamp"; } > "$cliamp_conf"
+  if command -v cliamp &>/dev/null && [[ -S $HOME/.config/cliamp/cliamp.sock ]]; then
+    cliamp vis None &>/dev/null || true
+  fi
+  echo "set (backup: $cliamp_conf.bak.$stamp)"
+fi
+
 printf '\nDone.\n'

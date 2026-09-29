@@ -22,6 +22,7 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - **Function keys**: top row acts as brightness/volume/media keys by default, F1–F12 with Fn (`hid_apple fnmode=1`).
 - **Zen browser hardware video decoding**: the UHD 617 can't decode AV1, so AV1 is disabled and YouTube
   falls back to VP9, which the GPU decodes. Written to the default profile's `user.js`; restart Zen to apply.
+- **cliamp visualizer off** (`visualizer = "None"` in `~/.config/cliamp/config.toml`).
 - **Balanced power profile**: on the 7W i5-8210Y, `performance` mostly adds heat and throttling.
 
 ## Files
