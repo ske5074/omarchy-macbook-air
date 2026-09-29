@@ -3,7 +3,7 @@
 My customizations for [Omarchy](https://omarchy.org/) on a 2018 MacBook Air (T2, Intel UHD 617).
 
 ```
-git clone https://github.com/<you>/omarchy-macbook-air
+git clone https://github.com/ske5074/omarchy-macbook-air
 cd omarchy-macbook-air
 ./install.sh
 ```
