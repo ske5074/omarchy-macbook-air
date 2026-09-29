@@ -1,0 +1,62 @@
+#!/bin/bash
+# CPU, GPU and memory usage for the Omarchy bar (Waybar-style JSON).
+# CPU and GPU % are deltas since the previous run, cached in the runtime dir.
+
+state="${XDG_RUNTIME_DIR:-/tmp}/omarchy-sysstats"
+
+read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
+total=$((user + nice + system + idle + iowait + irq + softirq + steal))
+idle_all=$((idle + iowait))
+now=$(date +%s%N)
+
+# GPU busy time per engine, summed over DRM clients (deduped by client id).
+# Only this user's processes are readable, which covers the compositor and apps.
+read -r gpu_render gpu_video gpu_copy gpu_enhance < <(
+  grep -s -H -E '^drm-(client-id|engine-(render|video|copy|video-enhance)):' /proc/[0-9]*/fdinfo/* |
+    awk -F'[:\t ]+' '
+      { f = $1 }
+      $2 == "drm-client-id" { id[f] = $3; next }
+      { v[f, $2] = $3; files[f] = 1 }
+      END {
+        for (f in files) {
+          if (!(f in id) || seen[id[f]]++) continue
+          r += v[f, "drm-engine-render"]; vd += v[f, "drm-engine-video"]
+          c += v[f, "drm-engine-copy"]; e += v[f, "drm-engine-video-enhance"]
+        }
+        printf "%d %d %d %d\n", r, vd, c, e
+      }'
+)
+
+cpu=0 gpu=0
+if [[ -r $state ]]; then
+  read -r p_total p_idle p_now p_render p_video p_copy p_enhance < "$state"
+  dt=$((total - p_total))
+  di=$((idle_all - p_idle))
+  (( dt > 0 )) && cpu=$(( (100 * (dt - di) + dt / 2) / dt ))
+
+  elapsed=$((now - p_now))
+  if (( elapsed > 0 )); then
+    # Report the busiest engine, like intel_gpu_top does.
+    for pair in "$gpu_render $p_render" "$gpu_video $p_video" "$gpu_copy $p_copy" "$gpu_enhance $p_enhance"; do
+      read -r cur prev <<< "$pair"
+      d=$((cur - prev))
+      (( d < 0 )) && d=0 # a client exited and took its counters with it
+      pct=$(( (100 * d + elapsed / 2) / elapsed ))
+      (( pct > gpu )) && gpu=$pct
+    done
+    (( gpu > 100 )) && gpu=100
+  fi
+fi
+echo "$total $idle_all $now $gpu_render $gpu_video $gpu_copy $gpu_enhance" > "$state"
+
+read -r mem_total mem_avail < <(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print t, a}' /proc/meminfo)
+mem_used=$((mem_total - mem_avail))
+mem=$(( (100 * mem_used + mem_total / 2) / mem_total ))
+used_gb=$(awk -v k="$mem_used" 'BEGIN{printf "%.1f", k/1048576}')
+total_gb=$(awk -v k="$mem_total" 'BEGIN{printf "%.1f", k/1048576}')
+
+class=normal
+(( cpu >= 90 || gpu >= 90 || mem >= 90 )) && class=critical
+
+printf '{"text":" %d%%  \U000f0379 %d%%   %d%%","tooltip":"CPU: %d%%\\nGPU: %d%%\\nMemory: %s / %s GiB (%d%%)","class":"%s"}\n' \
+  "$cpu" "$gpu" "$mem" "$cpu" "$gpu" "$used_gb" "$total_gb" "$mem" "$class"
