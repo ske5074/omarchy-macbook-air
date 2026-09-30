@@ -151,4 +151,30 @@ else
   echo "set (backup: $cliamp_conf.bak.$stamp)"
 fi
 
+# 8. Hide Hibernate from the system menu: the T2 drivers (t2bce_vhci) can't
+# resume from hibernation, so the keyboard and trackpad are dead afterwards.
+step "Hiding Hibernate from the system menu"
+menu_jsonc="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+if grep -qs '"system.hibernate"' "$menu_jsonc"; then
+  echo "already hidden"
+else
+  if [[ -f $menu_jsonc ]]; then
+    cp "$menu_jsonc" "$menu_jsonc.bak.$stamp"
+  else
+    mkdir -p "$(dirname "$menu_jsonc")"
+    echo '{' > "$menu_jsonc.bak.$stamp"
+    echo '}' >> "$menu_jsonc.bak.$stamp"
+  fi
+  # Reusing the id overrides the default entry; a false "when" hides it.
+  # Insert just before the closing brace.
+  awk -v last="$(grep -n '^}' "$menu_jsonc.bak.$stamp" | tail -1 | cut -d: -f1)" '
+    NR == last {
+      print "  // Hide Hibernate: the T2 drivers lose the keyboard/trackpad on hibernate resume."
+      print "  \"system.hibernate\": {\"when\":\"false\"},"
+    }
+    { print }' "$menu_jsonc.bak.$stamp" > "$menu_jsonc"
+  command -v omarchy &>/dev/null && omarchy menu refresh &>/dev/null || true
+  echo "hidden (backup: $menu_jsonc.bak.$stamp)"
+fi
+
 printf '\nDone.\n'

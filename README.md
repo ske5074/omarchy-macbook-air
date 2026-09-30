@@ -24,6 +24,8 @@ The script is safe to re-run. It backs up any config file before changing it (`*
   falls back to VP9, which the GPU decodes. Written to the default profile's `user.js`; restart Zen to apply.
 - **cliamp visualizer off** (`visualizer = "None"` in `~/.config/cliamp/config.toml`).
 - **Balanced power profile**: on the 7W i5-8210Y, `performance` mostly adds heat and throttling.
+- **Hibernate hidden from the system menu**: the T2 keyboard/trackpad driver (`t2bce_vhci`) can't resume from
+  hibernation, leaving no keyboard or trackpad. Suspend works fine and is what closing the lid does.
 
 ## Files
 
