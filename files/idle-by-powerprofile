@@ -1,7 +1,9 @@
 #!/bin/bash
-# Set Omarchy idle timeouts (screensaver/lock) and an idle suspend timeout based on
-# the active power profile. Runs once, then follows power-profiles-daemon changes over D-Bus.
-# swayidle handles suspend, and locks the screen before every sleep (idle or manual).
+# Run the screensaver, lock, and suspend on idle, with times based on the active power
+# profile. Runs once, then follows power-profiles-daemon changes over D-Bus.
+# swayidle runs all three with Omarchy's own commands, and locks the screen before every
+# sleep (idle or manual). Omarchy's idle timer is pushed out of the way instead of fed
+# the times, because every shell.json write makes the shell rebuild the bar.
 #
 # Usage:
 #   idle-by-powerprofile                       run the service
@@ -61,11 +63,16 @@ lock_and_wait() {
 export -f lock_and_wait
 
 start_swayidle() {
-  local suspend=$1
+  local screensaver=$1 lock=$2 suspend=$3
+  # Every idle action respects Omarchy's Stay Awake toggle
+  local awake="[ -e '$stay_awake' ]"
   local args=(-w before-sleep 'bash -c lock_and_wait')
 
-  # Respect Omarchy's Stay Awake toggle
-  ((suspend > 0)) && args+=(timeout "$suspend" "[ -e '$stay_awake' ] || systemctl suspend")
+  # resume: like Omarchy's idle service, restore displays and keyboard backlight
+  args+=(timeout "$screensaver" "$awake || [ \"\$(omarchy-shell lock isLocked 2>/dev/null)\" = true ] || omarchy-launch-screensaver"
+    resume omarchy-system-wake)
+  args+=(timeout "$lock" "$awake || omarchy-system-lock" resume omarchy-system-wake)
+  ((suspend > 0)) && args+=(timeout "$suspend" "$awake || systemctl suspend")
 
   [[ -n $swayidle_pid ]] && kill "$swayidle_pid" 2>/dev/null && wait "$swayidle_pid" 2>/dev/null
   swayidle "${args[@]}" &
@@ -81,17 +88,22 @@ apply() {
     | [$t.screensaver // 900, $t.lock // 1800, $t.suspend // 0] | @tsv' "$times")
   [[ -n $suspend ]] || return
 
-  start_swayidle "$suspend"
+  start_swayidle "$screensaver" "$lock" "$suspend"
 
   mkdir -p "$(dirname "$status")"
   printf 'profile\t%s\nscreensaver\t%s\nlock\t%s\nsuspend\t%s\n' "$profile" "$screensaver" "$lock" "$suspend" >"$status"
 
-  # Skip writing if nothing changed, to avoid needless shell reloads
-  [[ $(jq -c '[.idle.screensaver, .idle.lock]' "$config") == "[$screensaver,$lock]" ]] && return
+}
+
+# Push Omarchy's own idle timer out to a week so it never fires before ours. Written
+# only when it differs, since each shell.json write rebuilds the bar.
+park_omarchy_idle() {
+  local week=604800 tmp
+  [[ -f $config ]] || return
+  [[ $(jq -c '[.idle.screensaver, .idle.lock]' "$config") == "[$week,$week]" ]] && return
 
   tmp=$(mktemp "$config.XXXXXX") &&
-    jq --indent 2 --argjson s "$screensaver" --argjson l "$lock" \
-      '.idle.screensaver = $s | .idle.lock = $l' "$config" >"$tmp" &&
+    jq --indent 2 --argjson w "$week" '.idle.screensaver = $w | .idle.lock = $w' "$config" >"$tmp" &&
     cat "$tmp" >"$config"
   rm -f "$tmp"
 }
@@ -99,6 +111,7 @@ apply() {
 trap '[[ -n $swayidle_pid ]] && kill "$swayidle_pid" 2>/dev/null' EXIT
 trap apply HUP
 
+park_omarchy_idle
 apply
 while true; do
   if read -r line; then

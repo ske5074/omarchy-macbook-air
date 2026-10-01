@@ -26,9 +26,10 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - **Balanced power profile**: on the 7W i5-8210Y, `performance` mostly adds heat and throttling.
 - **Hibernate hidden from the system menu**: the T2 keyboard/trackpad driver (`t2bce_vhci`) can't resume from
   hibernation, leaving no keyboard or trackpad. Suspend works fine and is what closing the lid does.
-- **Idle timeouts by power profile**: a user service watches the power profile and sets the screensaver,
-  lock, and idle suspend times. The screen always locks before suspending, including manual suspends.
-  Suspend uses `swayidle` and respects the bar's Stay Awake toggle.
+- **Idle timeouts by power profile**: a user service watches the power profile and runs the screensaver,
+  lock, and idle suspend through `swayidle`, using Omarchy's own screensaver, lock, and wake commands. The
+  screen always locks before suspending, including manual suspends. Everything respects the bar's Stay Awake
+  toggle.
 
   | Profile | Screensaver | Lock | Suspend |
   |---|---|---|---|
@@ -38,8 +39,10 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 
   These are the defaults. The times live in `~/.config/omarchy/idle-by-powerprofile.json` (created on first
   run, kept on re-runs). Change them in the power panel (below) or with
-  `idle-by-powerprofile set <screensaver|lock|suspend> <seconds>`, which edits the active profile. The service
-  owns `idle` in `shell.json`, so don't edit that directly.
+  `idle-by-powerprofile set <screensaver|lock|suspend> <seconds>`, which edits the active profile.
+
+  Omarchy's own idle timer is set to a week in `shell.json` once, so it never fires first. The times aren't
+  kept in `shell.json` because every write to it makes the shell rebuild the bar.
 - **Idle controls in the power panel**: the battery panel in the bar gets an Idle section for the active
   profile, with editable screensaver, lock, and suspend times in minutes (suspend 0 = never) and a Stay Awake
   switch. It's a clone of Omarchy's power panel (`~/.config/omarchy/plugins/$USER.power`) with

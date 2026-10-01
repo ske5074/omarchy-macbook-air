@@ -177,8 +177,8 @@ else
   echo "hidden (backup: $menu_jsonc.bak.$stamp)"
 fi
 
-# 9. Idle timeouts by power profile: screensaver/lock in shell.json, plus an idle
-# suspend via swayidle that locks the screen before every sleep.
+# 9. Idle timeouts by power profile: swayidle runs the screensaver, lock, and suspend,
+# and locks the screen before every sleep.
 step "Setting idle timeouts by power profile"
 if pacman -Q swayidle &>/dev/null; then
   echo "swayidle already installed"
