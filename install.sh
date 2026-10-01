@@ -177,4 +177,24 @@ else
   echo "hidden (backup: $menu_jsonc.bak.$stamp)"
 fi
 
+# 9. Idle timeouts by power profile: screensaver/lock in shell.json, plus an idle
+# suspend via swayidle that locks the screen before every sleep.
+step "Setting idle timeouts by power profile"
+if pacman -Q swayidle &>/dev/null; then
+  echo "swayidle already installed"
+else
+  sudo pacman -S --needed --noconfirm swayidle
+fi
+if [[ -f $shell_json ]]; then
+  cp "$shell_json" "$shell_json.bak.$stamp"
+  echo "shell.json backup: $shell_json.bak.$stamp"
+fi
+install -Dm755 "$here/files/idle-by-powerprofile" "$HOME/.local/bin/idle-by-powerprofile"
+install -Dm644 "$here/files/idle-by-powerprofile.service" "$HOME/.config/systemd/user/idle-by-powerprofile.service"
+systemctl --user daemon-reload
+systemctl --user enable idle-by-powerprofile.service >/dev/null 2>&1
+# Restart so a re-run picks up an updated script.
+systemctl --user restart idle-by-powerprofile.service
+echo "enabled (times are set in files/idle-by-powerprofile)"
+
 printf '\nDone.\n'

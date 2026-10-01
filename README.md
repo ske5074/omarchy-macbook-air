@@ -26,8 +26,22 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - **Balanced power profile**: on the 7W i5-8210Y, `performance` mostly adds heat and throttling.
 - **Hibernate hidden from the system menu**: the T2 keyboard/trackpad driver (`t2bce_vhci`) can't resume from
   hibernation, leaving no keyboard or trackpad. Suspend works fine and is what closing the lid does.
+- **Idle timeouts by power profile**: a user service watches the power profile and sets the screensaver,
+  lock, and idle suspend times. The screen always locks before suspending, including manual suspends.
+  Suspend uses `swayidle` and respects the bar's Stay Awake toggle.
+
+  | Profile | Screensaver | Lock | Suspend |
+  |---|---|---|---|
+  | Performance | 30 min | 60 min | never |
+  | Balanced | 15 min | 30 min | 10 min |
+  | Power-saver | 5 min | 10 min | 5 min |
+
+  The service owns `idle` in `shell.json`, so change the times in `files/idle-by-powerprofile` and re-run
+  `./install.sh` instead of editing `shell.json`.
 
 ## Files
 
 - `install.sh`: applies everything
 - `files/sysstats`: bar widget script, installed to `~/.config/omarchy/bar/scripts/sysstats`
+- `files/idle-by-powerprofile`: idle timeout script, installed to `~/.local/bin/idle-by-powerprofile`
+- `files/idle-by-powerprofile.service`: systemd user service that runs it, installed to `~/.config/systemd/user/`

@@ -1,0 +1,11 @@
+[Unit]
+Description=Adjust Omarchy idle timeouts by power profile
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/idle-by-powerprofile
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

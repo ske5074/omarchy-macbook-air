@@ -1,0 +1,58 @@
+#!/bin/bash
+# Set Omarchy idle timeouts (screensaver/lock) and an idle suspend timeout based on
+# the active power profile. Runs once, then follows power-profiles-daemon changes over D-Bus.
+# swayidle handles suspend, and locks the screen before every sleep (idle or manual).
+
+config="$HOME/.config/omarchy/shell.json"
+stay_awake="$HOME/.local/state/omarchy/indicators/stay-awake"
+swayidle_pid=""
+
+lock_and_wait() {
+  omarchy system lock
+  for _ in {1..20}; do
+    [[ $(omarchy-shell lock isLocked 2>/dev/null) == "true" ]] && return
+    sleep 0.1
+  done
+}
+export -f lock_and_wait
+
+start_swayidle() {
+  local suspend=$1
+  local args=(-w before-sleep 'bash -c lock_and_wait')
+
+  # Respect Omarchy's Stay Awake toggle
+  ((suspend > 0)) && args+=(timeout "$suspend" "[ -e '$stay_awake' ] || systemctl suspend")
+
+  [[ -n $swayidle_pid ]] && kill "$swayidle_pid" 2>/dev/null && wait "$swayidle_pid" 2>/dev/null
+  swayidle "${args[@]}" &
+  swayidle_pid=$!
+}
+
+apply() {
+  local profile screensaver lock suspend tmp
+  profile=$(powerprofilesctl get 2>/dev/null) || return
+  # Times in seconds; suspend 0 = never
+  case "$profile" in
+    performance) screensaver=1800 lock=3600 suspend=0 ;;
+    power-saver) screensaver=300 lock=600 suspend=300 ;;
+    *) screensaver=900 lock=1800 suspend=600 ;;
+  esac
+
+  start_swayidle "$suspend"
+
+  # Skip writing if nothing changed, to avoid needless shell reloads
+  [[ $(jq -c '[.idle.screensaver, .idle.lock]' "$config") == "[$screensaver,$lock]" ]] && return
+
+  tmp=$(mktemp "$config.XXXXXX") &&
+    jq --indent 2 --argjson s "$screensaver" --argjson l "$lock" \
+      '.idle.screensaver = $s | .idle.lock = $l' "$config" >"$tmp" &&
+    cat "$tmp" >"$config"
+  rm -f "$tmp"
+}
+
+trap '[[ -n $swayidle_pid ]] && kill "$swayidle_pid" 2>/dev/null' EXIT
+
+apply
+while read -r line; do
+  [[ $line == *ActiveProfile* ]] && apply
+done < <(gdbus monitor --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles)
