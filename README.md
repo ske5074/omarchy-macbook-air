@@ -49,6 +49,10 @@ The script is safe to re-run. It backs up any config file before changing it (`*
   `files/power-panel-idle.patch` applied, so it no longer picks up Omarchy's updates to that panel. To refresh
   it, delete the clone and re-run `./install.sh`, which re-clones the current panel and re-applies the patch.
 
+  I've suggested building per-profile idle times, idle suspend, and these panel controls into Omarchy:
+  [omacom/omarchy#13960](https://github.com/omacom/omarchy/discussions/13960). If that lands, this step and
+  the idle script above can be dropped in favor of the built-in version.
+
 ## Files
 
 - `install.sh`: applies everything
