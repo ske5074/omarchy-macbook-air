@@ -25,10 +25,17 @@ install -Dm755 "$here/files/sysstats" "$HOME/.config/omarchy/bar/scripts/sysstat
 if [[ ! -f $shell_json ]]; then
   echo "no $shell_json found; skipping bar layout (run 'omarchy refresh shell' first)"
 elif jq -e '[.bar.layout[][] | select(.id == "sysstats")] | length > 0' "$shell_json" >/dev/null; then
-  echo "widget already in bar layout"
+  # Already placed; just make sure it refreshes every 10 seconds.
+  if jq -e '[.bar.layout[][] | select(.id == "sysstats") | .interval] | all(. == 10)' "$shell_json" >/dev/null; then
+    echo "widget already in bar layout"
+  else
+    cp "$shell_json" "$shell_json.bak.$stamp"
+    jq --indent 2 '(.bar.layout[][] | select(.id == "sysstats") | .interval) = 10' "$shell_json.bak.$stamp" > "$shell_json"
+    echo "refresh interval set to 10 seconds (backup: $shell_json.bak.$stamp)"
+  fi
 else
   cp "$shell_json" "$shell_json.bak.$stamp"
-  widget='{"id":"sysstats","type":"command","exec":"~/.config/omarchy/bar/scripts/sysstats","interval":2,"onClick":"omarchy-launch-or-focus-tui btop"}'
+  widget='{"id":"sysstats","type":"command","exec":"~/.config/omarchy/bar/scripts/sysstats","interval":10,"onClick":"omarchy-launch-or-focus-tui btop"}'
   # Place it right after the tray, or at the start of the right section.
   jq --argjson w "$widget" '
     .bar.layout.right |= (

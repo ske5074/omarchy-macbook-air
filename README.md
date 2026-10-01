@@ -13,7 +13,7 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 ## What it does
 
 - **Kate** text editor
-- **CPU / GPU / memory widget** in the bar, refreshed every 2 seconds. Hover for details, click to open btop.
+- **CPU / GPU / memory widget** in the bar, refreshed every 10 seconds. Hover for details, click to open btop.
   GPU usage is read from DRM fdinfo, so it needs no root, but only counts your own processes.
 - **Three-finger trackpad gestures**
   - left / right: switch workspace
