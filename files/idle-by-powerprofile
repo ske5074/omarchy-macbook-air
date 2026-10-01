@@ -2,12 +2,54 @@
 # Set Omarchy idle timeouts (screensaver/lock) and an idle suspend timeout based on
 # the active power profile. Runs once, then follows power-profiles-daemon changes over D-Bus.
 # swayidle handles suspend, and locks the screen before every sleep (idle or manual).
+#
+# Usage:
+#   idle-by-powerprofile                       run the service
+#   idle-by-powerprofile set <name> <seconds>  change screensaver|lock|suspend for the
+#                                              active profile (suspend 0 = never)
 
 config="$HOME/.config/omarchy/shell.json"
+# Times per profile, in seconds; created with the defaults below if missing
+times="$HOME/.config/omarchy/idle-by-powerprofile.json"
 stay_awake="$HOME/.local/state/omarchy/indicators/stay-awake"
 # Current times for the bar's power panel, as "<name>\t<seconds>" lines
 status="$HOME/.local/state/omarchy/idle-by-powerprofile"
 swayidle_pid=""
+
+ensure_times() {
+  [[ -f $times ]] && return
+  mkdir -p "$(dirname "$times")"
+  cat >"$times" <<'EOF'
+{
+  "performance": { "screensaver": 1800, "lock": 3600, "suspend": 0 },
+  "balanced": { "screensaver": 900, "lock": 1800, "suspend": 600 },
+  "power-saver": { "screensaver": 300, "lock": 600, "suspend": 300 }
+}
+EOF
+}
+
+set_time() {
+  local name=$1 seconds=$2 profile tmp
+  [[ $name =~ ^(screensaver|lock|suspend)$ && $seconds =~ ^[0-9]+$ ]] || {
+    echo "Usage: idle-by-powerprofile set <screensaver|lock|suspend> <seconds>" >&2
+    exit 1
+  }
+  [[ $seconds -gt 0 || $name == suspend ]] || { echo "$name must be at least 1 second" >&2; exit 1; }
+
+  ensure_times
+  profile=$(powerprofilesctl get) || exit
+  tmp=$(mktemp "$times.XXXXXX") &&
+    jq --indent 2 --arg p "$profile" --arg n "$name" --argjson s "$seconds" '.[$p][$n] = $s' "$times" >"$tmp" &&
+    mv "$tmp" "$times"
+
+  # Tell the running service to re-apply
+  systemctl --user kill --kill-whom=main -s HUP idle-by-powerprofile.service 2>/dev/null || true
+}
+
+if [[ ${1:-} == "set" ]]; then
+  set_time "${2:-}" "${3:-}"
+  exit
+fi
 
 lock_and_wait() {
   omarchy system lock
@@ -33,17 +75,16 @@ start_swayidle() {
 apply() {
   local profile screensaver lock suspend tmp
   profile=$(powerprofilesctl get 2>/dev/null) || return
-  # Times in seconds; suspend 0 = never
-  case "$profile" in
-    performance) screensaver=1800 lock=3600 suspend=0 ;;
-    power-saver) screensaver=300 lock=600 suspend=300 ;;
-    *) screensaver=900 lock=1800 suspend=600 ;;
-  esac
+  ensure_times
+  read -r screensaver lock suspend < <(jq -r --arg p "$profile" '
+    (.[$p] // .balanced) as $t
+    | [$t.screensaver // 900, $t.lock // 1800, $t.suspend // 0] | @tsv' "$times")
+  [[ -n $suspend ]] || return
 
   start_swayidle "$suspend"
 
   mkdir -p "$(dirname "$status")"
-  printf 'screensaver\t%s\nlock\t%s\nsuspend\t%s\n' "$screensaver" "$lock" "$suspend" >"$status"
+  printf 'profile\t%s\nscreensaver\t%s\nlock\t%s\nsuspend\t%s\n' "$profile" "$screensaver" "$lock" "$suspend" >"$status"
 
   # Skip writing if nothing changed, to avoid needless shell reloads
   [[ $(jq -c '[.idle.screensaver, .idle.lock]' "$config") == "[$screensaver,$lock]" ]] && return
@@ -56,8 +97,17 @@ apply() {
 }
 
 trap '[[ -n $swayidle_pid ]] && kill "$swayidle_pid" 2>/dev/null' EXIT
+trap apply HUP
 
 apply
-while read -r line; do
-  [[ $line == *ActiveProfile* ]] && apply
+while true; do
+  if read -r line; then
+    [[ $line == *ActiveProfile* ]] && apply
+  else
+    # A HUP interrupts read with a status above 128; anything else means gdbus exited
+    (($? > 128)) || break
+  fi
 done < <(gdbus monitor --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles)
+
+# gdbus exited unexpectedly; let systemd restart us
+exit 1

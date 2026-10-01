@@ -9,32 +9,70 @@
    property var profiles: []
    property string activeProfile: ""
    property int profileIndex: 0
-@@ -138,6 +140,16 @@
+@@ -138,6 +140,51 @@
      if (!batteryProc.running) batteryProc.running = true
      if (!profilesProc.running) profilesProc.running = true
      if (!systemProc.running) systemProc.running = true
 +    if (!idleProc.running) idleProc.running = true
 +  }
 +
-+  function idleTime(name) {
++  function idleMinutes(name) {
 +    var seconds = parseInt(root.idleInfo[name], 10)
-+    if (isNaN(seconds)) return "—"
-+    if (seconds <= 0) return "never"
-+    if (seconds % 3600 === 0) return (seconds / 3600) + " hr"
-+    if (seconds % 60 === 0) return (seconds / 60) + " min"
-+    return seconds + " sec"
++    return isNaN(seconds) ? 0 : Math.round(seconds / 60)
++  }
++
++  // Edits for the active profile, sent after a short pause so scrolling or
++  // typing a number doesn't restart the idle service on every step.
++  property var pendingIdle: ({})
++
++  function queueIdleTime(name, minutes) {
++    var next = Object.assign({}, root.pendingIdle)
++    next[name] = minutes
++    root.pendingIdle = next
++    idleCommitTimer.restart()
++  }
++
++  function commitIdleTimes() {
++    var names = Object.keys(root.pendingIdle)
++    if (names.length === 0 || idleSetProc.running) return
++    var args = []
++    for (var i = 0; i < names.length; i++)
++      args.push("idle-by-powerprofile set " + names[i] + " " + (root.pendingIdle[names[i]] * 60))
++    root.pendingIdle = ({})
++    idleSetProc.command = ["bash", "-c", args.join(" && ")]
++    idleSetProc.running = true
++  }
++
++  function setStayAwake(on) {
++    if (stayAwakeProc.running) return
++    root.idleInfo = Object.assign({}, root.idleInfo, { stayAwake: on ? "on" : "off" })
++    stayAwakeProc.command = ["omarchy-shell", "idle", on ? "disable" : "enable"]
++    stayAwakeProc.running = true
++  }
++
++  // Refreshes must not overwrite a field the user is editing.
++  function syncIdleFields() {
++    var fields = [screensaverField, lockField, suspendField]
++    for (var i = 0; i < fields.length; i++) {
++      var f = fields[i]
++      if (!f.field.activeFocus && root.pendingIdle[f.idleName] === undefined)
++        f.field.value = root.idleMinutes(f.idleName)
++    }
    }
  
    function updateKeyValue(raw, targetName) {
-@@ -146,6 +158,7 @@
+@@ -146,6 +193,10 @@
      // around AC plug/unplug events. Avoids the section collapsing mid-transition.
      if (Object.keys(next).length === 0) return
      if (targetName === "battery") batteryInfo = next
-+    else if (targetName === "idle") idleInfo = next
++    else if (targetName === "idle") {
++      idleInfo = next
++      syncIdleFields()
++    }
      else systemInfo = next
    }
  
-@@ -224,10 +237,22 @@
+@@ -224,7 +275,34 @@
    }
  
    Process {
@@ -45,20 +83,31 @@
 +
 +  Process {
      id: actionProc
--    onExited: root.refresh()
 +    onExited: {
 +      root.refresh()
 +      idleRefreshTimer.restart()
 +    }
-   }
- 
++  }
++
 +  // idle-by-powerprofile updates the times just after a profile switch, so re-read once it has.
 +  Timer { id: idleRefreshTimer; interval: 1000; onTriggered: root.refresh() }
 +
-   Timer { interval: 5000; running: root.opened; repeat: true; onTriggered: root.refresh() }
++  Timer { id: idleCommitTimer; interval: 800; onTriggered: root.commitIdleTimes() }
++
++  Process {
++    id: idleSetProc
++    onExited: {
++      if (Object.keys(root.pendingIdle).length > 0) root.commitIdleTimes()
++      else idleRefreshTimer.restart()
++    }
++  }
++
++  Process {
++    id: stayAwakeProc
+     onExited: root.refresh()
+   }
  
-   // Rotate the status phrase while the panel is open and we're in a
-@@ -503,6 +528,43 @@
+@@ -503,10 +581,84 @@
              }
            }
          }
@@ -74,31 +123,72 @@
 +          width: parent.width
 +          spacing: Style.space(10)
 +
-+          PanelSectionHeader {
-+            text: "IDLE"
-+            foreground: root.bar.foreground
-+            fontFamily: root.bar.fontFamily
++          Item {
++            width: parent.width
++            implicitHeight: Math.max(idleHeader.implicitHeight, stayAwakeRow.implicitHeight)
++
++            PanelSectionHeader {
++              id: idleHeader
++              anchors.left: parent.left
++              anchors.verticalCenter: parent.verticalCenter
++              text: "IDLE · " + String(root.idleInfo.profile || "").toUpperCase()
++              foreground: root.bar.foreground
++              fontFamily: root.bar.fontFamily
++            }
++
++            Row {
++              id: stayAwakeRow
++              anchors.right: parent.right
++              anchors.verticalCenter: parent.verticalCenter
++              spacing: Style.space(8)
++
++              InfoLabel {
++                anchors.verticalCenter: parent.verticalCenter
++                text: "Stay Awake"
++              }
++
++              ToggleSwitch {
++                anchors.verticalCenter: parent.verticalCenter
++                checked: root.idleInfo.stayAwake === "on"
++                busy: stayAwakeProc.running
++                foreground: root.bar.foreground
++                onToggled: root.setStayAwake(!checked)
++              }
++            }
 +          }
 +
 +          Row {
++            id: idleFields
 +            width: parent.width
-+            spacing: Style.space(20)
++            spacing: Style.space(10)
++            opacity: root.idleInfo.stayAwake === "on" ? 0.5 : 1
 +
-+            Column {
-+              width: (parent.width - parent.spacing) / 2
-+              spacing: Style.spacing.labelGap
-+              InfoPair { label: "Screensaver"; value: root.idleTime("screensaver") }
-+              InfoPair { label: "Suspend"; value: root.idleTime("suspend") }
-+            }
++            readonly property real cellWidth: (width - spacing * 2) / 3
 +
-+            Column {
-+              width: (parent.width - parent.spacing) / 2
-+              spacing: Style.spacing.labelGap
-+              InfoPair { label: "Lock"; value: root.idleTime("lock") }
-+              InfoPair { label: "Stay Awake"; value: root.idleInfo.stayAwake || "—" }
-+            }
++            IdleField { id: screensaverField; idleName: "screensaver"; label: "Screensaver"; from: 1 }
++            IdleField { id: lockField; idleName: "lock"; label: "Lock"; from: 1 }
++            IdleField { id: suspendField; idleName: "suspend"; label: "Suspend"; from: 0 }
++          }
++
++          InfoLabel {
++            text: "Minutes, for this profile. Suspend 0 = never."
 +          }
 +        }
        }
      }
    }
+ 
++  component IdleField: NumberField {
++    property string idleName: ""
++    width: idleFields.cellWidth
++    fieldWidth: idleFields.cellWidth
++    to: 600
++    foreground: root.bar.foreground
++    fontFamily: root.bar.fontFamily
++    fontSize: Style.font.bodySmall
++    onModified: function(v) { root.queueIdleTime(idleName, v) }
++  }
++
+   component InfoPair: Row {
+     property string label: ""
+     property string value: ""

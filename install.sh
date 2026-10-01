@@ -197,16 +197,22 @@ systemctl --user enable idle-by-powerprofile.service >/dev/null 2>&1
 systemctl --user restart idle-by-powerprofile.service
 echo "enabled (times are set in files/idle-by-powerprofile)"
 
-# 10. Show the idle times in the bar's power panel: clone the built-in panel and
-# patch an Idle section into it (reads the status file written by step 9).
-step "Adding idle times to the power panel"
+# 10. Idle controls in the bar's power panel: clone the built-in panel and patch in
+# an Idle section with editable times and a Stay Awake switch (uses step 9's script).
+step "Adding idle controls to the power panel"
 power_plugin="$HOME/.config/omarchy/plugins/$USER.power"
-if [[ -f $power_plugin/Panel.qml ]] && grep -q 'id: idleProc' "$power_plugin/Panel.qml"; then
+if [[ -f $power_plugin/Panel.qml ]] && grep -q 'id: idleSetProc' "$power_plugin/Panel.qml"; then
   echo "already added"
 elif ! command -v omarchy &>/dev/null; then
   echo "omarchy command not found; skipping"
 else
   [[ -f $shell_json ]] && cp "$shell_json" "$shell_json.bak.$stamp"
+  # An older read-only Idle section: move that clone aside (outside plugins/, so the
+  # shell doesn't load it) and re-clone, so the patch applies to a clean panel.
+  if [[ -f $power_plugin/Panel.qml ]] && grep -q 'id: idleProc' "$power_plugin/Panel.qml"; then
+    mv "$power_plugin" "$HOME/.config/omarchy/$USER.power.bak.$stamp"
+    echo "replacing the older version (backup: ~/.config/omarchy/$USER.power.bak.$stamp)"
+  fi
   [[ -d $power_plugin ]] || omarchy plugin clone omarchy.power
   if patch -s -d "$power_plugin" -p1 --dry-run < "$here/files/power-panel-idle.patch" >/dev/null; then
     patch -s -d "$power_plugin" -p1 --no-backup-if-mismatch < "$here/files/power-panel-idle.patch"
