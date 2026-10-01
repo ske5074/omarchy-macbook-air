@@ -5,6 +5,8 @@
 
 config="$HOME/.config/omarchy/shell.json"
 stay_awake="$HOME/.local/state/omarchy/indicators/stay-awake"
+# Current times for the bar's power panel, as "<name>\t<seconds>" lines
+status="$HOME/.local/state/omarchy/idle-by-powerprofile"
 swayidle_pid=""
 
 lock_and_wait() {
@@ -39,6 +41,9 @@ apply() {
   esac
 
   start_swayidle "$suspend"
+
+  mkdir -p "$(dirname "$status")"
+  printf 'screensaver\t%s\nlock\t%s\nsuspend\t%s\n' "$screensaver" "$lock" "$suspend" >"$status"
 
   # Skip writing if nothing changed, to avoid needless shell reloads
   [[ $(jq -c '[.idle.screensaver, .idle.lock]' "$config") == "[$screensaver,$lock]" ]] && return

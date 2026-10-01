@@ -38,6 +38,11 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 
   The service owns `idle` in `shell.json`, so change the times in `files/idle-by-powerprofile` and re-run
   `./install.sh` instead of editing `shell.json`.
+- **Idle times in the power panel**: the battery panel in the bar gets an Idle section showing the current
+  screensaver, lock, and suspend times, and whether Stay Awake is on. It's a clone of Omarchy's power panel
+  (`~/.config/omarchy/plugins/$USER.power`) with `files/power-panel-idle.patch` applied, so it no longer
+  picks up Omarchy's updates to that panel. To refresh it, delete the clone and re-run `./install.sh`, which
+  re-clones the current panel and re-applies the patch.
 
 ## Files
 
@@ -45,3 +50,4 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - `files/sysstats`: bar widget script, installed to `~/.config/omarchy/bar/scripts/sysstats`
 - `files/idle-by-powerprofile`: idle timeout script, installed to `~/.local/bin/idle-by-powerprofile`
 - `files/idle-by-powerprofile.service`: systemd user service that runs it, installed to `~/.config/systemd/user/`
+- `files/power-panel-idle.patch`: adds the Idle section to the cloned power panel

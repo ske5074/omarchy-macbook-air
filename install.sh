@@ -197,4 +197,23 @@ systemctl --user enable idle-by-powerprofile.service >/dev/null 2>&1
 systemctl --user restart idle-by-powerprofile.service
 echo "enabled (times are set in files/idle-by-powerprofile)"
 
+# 10. Show the idle times in the bar's power panel: clone the built-in panel and
+# patch an Idle section into it (reads the status file written by step 9).
+step "Adding idle times to the power panel"
+power_plugin="$HOME/.config/omarchy/plugins/$USER.power"
+if [[ -f $power_plugin/Panel.qml ]] && grep -q 'id: idleProc' "$power_plugin/Panel.qml"; then
+  echo "already added"
+elif ! command -v omarchy &>/dev/null; then
+  echo "omarchy command not found; skipping"
+else
+  [[ -f $shell_json ]] && cp "$shell_json" "$shell_json.bak.$stamp"
+  [[ -d $power_plugin ]] || omarchy plugin clone omarchy.power
+  if patch -s -d "$power_plugin" -p1 --dry-run < "$here/files/power-panel-idle.patch" >/dev/null; then
+    patch -s -d "$power_plugin" -p1 --no-backup-if-mismatch < "$here/files/power-panel-idle.patch"
+    echo "added to $power_plugin"
+  else
+    echo "patch doesn't apply to this Omarchy's power panel; update files/power-panel-idle.patch"
+  fi
+fi
+
 printf '\nDone.\n'

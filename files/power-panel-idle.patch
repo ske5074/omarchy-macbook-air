@@ -1,0 +1,104 @@
+--- a/Panel.qml
++++ b/Panel.qml
+@@ -15,6 +15,8 @@
+   manageIpc: false
+   property var batteryInfo: ({})
+   property var systemInfo: ({})
++  // Idle times from ~/.local/bin/idle-by-powerprofile, plus the Stay Awake toggle
++  property var idleInfo: ({})
+   property var profiles: []
+   property string activeProfile: ""
+   property int profileIndex: 0
+@@ -138,6 +140,16 @@
+     if (!batteryProc.running) batteryProc.running = true
+     if (!profilesProc.running) profilesProc.running = true
+     if (!systemProc.running) systemProc.running = true
++    if (!idleProc.running) idleProc.running = true
++  }
++
++  function idleTime(name) {
++    var seconds = parseInt(root.idleInfo[name], 10)
++    if (isNaN(seconds)) return "—"
++    if (seconds <= 0) return "never"
++    if (seconds % 3600 === 0) return (seconds / 3600) + " hr"
++    if (seconds % 60 === 0) return (seconds / 60) + " min"
++    return seconds + " sec"
+   }
+ 
+   function updateKeyValue(raw, targetName) {
+@@ -146,6 +158,7 @@
+     // around AC plug/unplug events. Avoids the section collapsing mid-transition.
+     if (Object.keys(next).length === 0) return
+     if (targetName === "battery") batteryInfo = next
++    else if (targetName === "idle") idleInfo = next
+     else systemInfo = next
+   }
+ 
+@@ -224,10 +237,22 @@
+   }
+ 
+   Process {
++    id: idleProc
++    command: ["bash", "-c", "cat \"$HOME/.local/state/omarchy/idle-by-powerprofile\" 2>/dev/null; if [[ -e $HOME/.local/state/omarchy/indicators/stay-awake ]]; then printf 'stayAwake\\ton\\n'; else printf 'stayAwake\\toff\\n'; fi"]
++    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateKeyValue(text, "idle") }
++  }
++
++  Process {
+     id: actionProc
+-    onExited: root.refresh()
++    onExited: {
++      root.refresh()
++      idleRefreshTimer.restart()
++    }
+   }
+ 
++  // idle-by-powerprofile updates the times just after a profile switch, so re-read once it has.
++  Timer { id: idleRefreshTimer; interval: 1000; onTriggered: root.refresh() }
++
+   Timer { interval: 5000; running: root.opened; repeat: true; onTriggered: root.refresh() }
+ 
+   // Rotate the status phrase while the panel is open and we're in a
+@@ -503,6 +528,43 @@
+             }
+           }
+         }
++
++        // ---------- Idle timeouts for the active profile ----------
++        PanelSeparator {
++          visible: root.idleInfo.screensaver !== undefined
++          foreground: root.bar.foreground
++        }
++
++        Column {
++          visible: root.idleInfo.screensaver !== undefined
++          width: parent.width
++          spacing: Style.space(10)
++
++          PanelSectionHeader {
++            text: "IDLE"
++            foreground: root.bar.foreground
++            fontFamily: root.bar.fontFamily
++          }
++
++          Row {
++            width: parent.width
++            spacing: Style.space(20)
++
++            Column {
++              width: (parent.width - parent.spacing) / 2
++              spacing: Style.spacing.labelGap
++              InfoPair { label: "Screensaver"; value: root.idleTime("screensaver") }
++              InfoPair { label: "Suspend"; value: root.idleTime("suspend") }
++            }
++
++            Column {
++              width: (parent.width - parent.spacing) / 2
++              spacing: Style.spacing.labelGap
++              InfoPair { label: "Lock"; value: root.idleTime("lock") }
++              InfoPair { label: "Stay Awake"; value: root.idleInfo.stayAwake || "—" }
++            }
++          }
++        }
+       }
+     }
+   }
