@@ -1,0 +1,78 @@
+--- a/Panel.qml
++++ b/Panel.qml
+@@ -31,6 +31,12 @@
+   // Live connection details from `ip` / /sys / iw.
+   property var info: ({})  // { iface, type, ip, prefix, gateway, speed, duplex, ssid, signal, freq, bitrate, rx_bytes, tx_bytes, router_ping_ms, internet_ping_ms }
+ 
++  // Twingate client state from `twingate status` (online | offline |
++  // authenticating | not-running ...). Hidden entirely when the CLI is absent.
++  property bool twingateInstalled: false
++  property string twingateStatus: ""
++  readonly property bool twingateOnline: twingateStatus === "online"
++
+   // Throughput tracking. Rates are computed as deltas between successive
+   // `omarchy-network-status --verbose` samples (~1.5s apart via detailsPoll).
+   // We hold "prev" alongside a timestamp so the first sample after open or
+@@ -816,6 +822,25 @@
+     }
+   }
+ 
++  // Exit 3 means the twingate CLI isn't installed.
++  Process {
++    id: twingateProc
++    command: ["bash", "-c", "command -v twingate >/dev/null || exit 3; twingate status 2>/dev/null"]
++    stdout: StdioCollector {
++      waitForEnd: true
++      onStreamFinished: root.twingateStatus = text.trim().toLowerCase()
++    }
++    onExited: function(code) { root.twingateInstalled = code !== 3 }
++  }
++
++  Timer {
++    interval: root.opened ? 3000 : 15000
++    repeat: true
++    running: true
++    triggeredOnStart: true
++    onTriggered: if (!twingateProc.running) twingateProc.running = true
++  }
++
+   Timer {
+     id: scanRestart
+     interval: 100
+@@ -967,6 +992,21 @@
+       // that deferral and stalling the open on NetworkManager's AP flood.
+       else root.open()
+     }
++
++    // Twingate badge: solid when connected, hollow when installed but not.
++    Rectangle {
++      visible: root.twingateInstalled
++      width: Style.space(5)
++      height: width
++      radius: width / 2
++      color: root.twingateOnline ? root.bar.foreground : "transparent"
++      border.width: 1
++      border.color: root.bar.foreground
++      anchors.right: parent.right
++      anchors.bottom: parent.bottom
++      anchors.rightMargin: Style.space(3)
++      anchors.bottomMargin: Style.space(3)
++    }
+   }
+ 
+   // Keyboard-driven popup anchored to the bar widget icon. The shared
+@@ -1264,6 +1304,14 @@
+             copyable: !!root.info.gateway
+             tooltipText: "Copy gateway"
+           }
++
++          InfoLabel { text: "Twingate"; visible: root.twingateInstalled }
++          DetailValue {
++            visible: root.twingateInstalled
++            text: root.twingateStatus === "" ? "--"
++              : root.twingateStatus.charAt(0).toUpperCase() + root.twingateStatus.slice(1)
++            color: root.twingateOnline ? root.bar.foreground : root.bar.urgent
++          }
+         }
+       }
+ 

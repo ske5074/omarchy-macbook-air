@@ -53,6 +53,15 @@ The script is safe to re-run. It backs up any config file before changing it (`*
   [omacom/omarchy#13960](https://github.com/omacom/omarchy/discussions/13960). If that lands, this step and
   the idle script above can be dropped in favor of the built-in version.
 
+- **Screenshot on Super+Shift+S**: the MacBook keyboard has no Print key. This replaces Omarchy's Google
+  Maps web app binding on that key. Super+Ctrl+C (the capture menu) also works without Print.
+- **Twingate** client from the AUR. Run `sudo twingate setup` afterwards to join your network.
+- **Twingate status in the network panel**: the Wi-Fi icon in the bar gets a small dot, filled when Twingate
+  is online and hollow when it isn't (no dot if Twingate isn't installed). The panel's details list a
+  Twingate row with the current status. Like the power panel, it's a clone
+  (`~/.config/omarchy/plugins/$USER.network`) with `files/network-panel-twingate.patch` applied, so it no
+  longer picks up Omarchy's updates to that panel. Delete the clone and re-run `./install.sh` to refresh it.
+
 ## Files
 
 - `install.sh`: applies everything
@@ -60,3 +69,4 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - `files/idle-by-powerprofile`: idle timeout script, installed to `~/.local/bin/idle-by-powerprofile`
 - `files/idle-by-powerprofile.service`: systemd user service that runs it, installed to `~/.config/systemd/user/`
 - `files/power-panel-idle.patch`: adds the Idle controls to the cloned power panel
+- `files/network-panel-twingate.patch`: adds Twingate status to the cloned network panel

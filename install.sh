@@ -229,4 +229,59 @@ else
   fi
 fi
 
+# 11. Screenshot on Super+Shift+S: the MacBook keyboard has no Print key.
+# Omarchy binds Super+Shift+S to the Google Maps web app, so unbind that first.
+step "Binding Super+Shift+S to screenshot"
+bindings_lua="$HOME/.config/hypr/bindings.lua"
+if [[ ! -f $bindings_lua ]]; then
+  echo "no $bindings_lua found; skipping"
+elif grep -q '^o.bind("SUPER + SHIFT + S", .*omarchy-capture-screenshot' "$bindings_lua"; then
+  echo "already bound"
+else
+  cp "$bindings_lua" "$bindings_lua.bak.$stamp"
+  # Drop Omarchy's commented-out example, then add the real binding.
+  grep -v '^-- o.bind("SUPER + SHIFT + S", nil, "omarchy-capture-screenshot")' "$bindings_lua.bak.$stamp" > "$bindings_lua"
+  cat >> "$bindings_lua" <<'EOF'
+
+-- Screenshot (no Print key on the MacBook). Replaces the Google Maps web app binding.
+hl.unbind("SUPER + SHIFT + S")
+o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
+EOF
+  if command -v hyprctl &>/dev/null && hyprctl version &>/dev/null; then
+    hyprctl reload >/dev/null
+    hyprctl configerrors
+  fi
+  echo "bound (backup: $bindings_lua.bak.$stamp)"
+fi
+
+# 12. Twingate client (AUR). Joining the network is interactive, so it's left to you.
+step "Installing Twingate"
+if pacman -Q twingate &>/dev/null; then
+  echo "already installed"
+elif ! command -v yay &>/dev/null; then
+  echo "yay not found; skipping"
+else
+  yay -S --needed --noconfirm twingate
+  echo "installed; run 'sudo twingate setup' to join your network"
+fi
+
+# 13. Twingate status in the bar's network panel: clone the built-in panel and
+# patch in a badge on the Wi-Fi icon and a Twingate row in the popup.
+step "Adding Twingate status to the network panel"
+network_plugin="$HOME/.config/omarchy/plugins/$USER.network"
+if [[ -f $network_plugin/Panel.qml ]] && grep -q 'id: twingateProc' "$network_plugin/Panel.qml"; then
+  echo "already added"
+elif ! command -v omarchy &>/dev/null; then
+  echo "omarchy command not found; skipping"
+else
+  [[ -f $shell_json ]] && cp "$shell_json" "$shell_json.bak.$stamp"
+  [[ -d $network_plugin ]] || omarchy plugin clone omarchy.network
+  if patch -s -d "$network_plugin" -p1 --dry-run < "$here/files/network-panel-twingate.patch" >/dev/null; then
+    patch -s -d "$network_plugin" -p1 --no-backup-if-mismatch < "$here/files/network-panel-twingate.patch"
+    echo "added to $network_plugin"
+  else
+    echo "patch doesn't apply to this Omarchy's network panel; update files/network-panel-twingate.patch"
+  fi
+fi
+
 printf '\nDone.\n'
