@@ -62,6 +62,13 @@ The script is safe to re-run. It backs up any config file before changing it (`*
   (`~/.config/omarchy/plugins/$USER.network`) with `files/network-panel-twingate.patch` applied, so it no
   longer picks up Omarchy's updates to that panel. Delete the clone and re-run `./install.sh` to refresh it.
 
+- **Keyboard chatter filter**: worn butterfly switches register one tap as two presses (double spaces,
+  mostly). `interception-tools` runs the built-in keyboard through `files/key-debounce.c`, which drops a
+  press arriving within 30 ms of the same key's release. Real double letters are typed much further apart.
+  The threshold is in `files/key-debounce.yaml`. To turn it off: `sudo systemctl disable --now udevmon`.
+- **Key repeat delay of 400 ms** (Omarchy's default is 250): slow-releasing keys were starting to repeat.
+  fcitx5 handles repeat and reads the delay only at startup, so the step restarts it.
+
 ## Files
 
 - `install.sh`: applies everything
@@ -70,3 +77,5 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - `files/idle-by-powerprofile.service`: systemd user service that runs it, installed to `~/.config/systemd/user/`
 - `files/power-panel-idle.patch`: adds the Idle controls to the cloned power panel
 - `files/network-panel-twingate.patch`: adds Twingate status to the cloned network panel
+- `files/key-debounce.c`: keyboard chatter filter, compiled to `/usr/local/bin/key-debounce`
+- `files/key-debounce.yaml`: udevmon job that runs it, installed to `/etc/interception/udevmon.d/`

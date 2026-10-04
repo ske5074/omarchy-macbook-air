@@ -284,4 +284,51 @@ else
   fi
 fi
 
+# 14. Drop key chatter: worn butterfly switches register one tap as two presses.
+# interception-tools runs the built-in keyboard through files/key-debounce.c.
+step "Filtering keyboard chatter"
+if pacman -Q interception-tools &>/dev/null; then
+  echo "interception-tools already installed"
+else
+  sudo pacman -S --needed --noconfirm interception-tools
+fi
+debounce_bin=/usr/local/bin/key-debounce
+debounce_yaml=/etc/interception/udevmon.d/key-debounce.yaml
+debounce_tmp="$(mktemp)"
+gcc -O2 -o "$debounce_tmp" "$here/files/key-debounce.c"
+if cmp -s "$debounce_tmp" "$debounce_bin" && cmp -s "$here/files/key-debounce.yaml" "$debounce_yaml" \
+  && systemctl is-active --quiet udevmon; then
+  echo "already running"
+else
+  sudo install -Dm755 "$debounce_tmp" "$debounce_bin"
+  sudo install -Dm644 "$here/files/key-debounce.yaml" "$debounce_yaml"
+  sudo systemctl enable udevmon >/dev/null 2>&1
+  sudo systemctl restart udevmon
+  echo "running (threshold 30 ms, set in files/key-debounce.yaml)"
+fi
+rm -f "$debounce_tmp"
+
+# 15. Key repeat waits 400ms (Omarchy's 250ms caught slow-releasing butterfly keys).
+step "Setting key repeat delay to 400ms"
+if [[ ! -f $input_lua ]]; then
+  echo "no $input_lua found; skipping"
+elif grep -q '^hl.config({ input = { repeat_delay = 400 } })' "$input_lua"; then
+  echo "already set"
+else
+  cp "$input_lua" "$input_lua.bak.$stamp"
+  cat >> "$input_lua" <<'EOF2'
+
+-- Wait longer before key repeat starts: butterfly keys that release slowly were
+-- registering a second character at Omarchy's 250ms default.
+hl.config({ input = { repeat_delay = 400 } })
+EOF2
+  if command -v hyprctl &>/dev/null && hyprctl version &>/dev/null; then
+    hyprctl reload >/dev/null
+    hyprctl configerrors
+  fi
+  # fcitx5 handles key repeat and only reads the delay when it starts.
+  pgrep -x fcitx5 >/dev/null && setsid -f fcitx5 -r -d --disable notificationitem >/dev/null 2>&1
+  echo "set (backup: $input_lua.bak.$stamp)"
+fi
+
 printf '\nDone.\n'

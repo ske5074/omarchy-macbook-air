@@ -1,0 +1,7 @@
+# Runs the built-in keyboard through key-debounce. EV_KEY: [KEY_SPACE] matches the
+# keyboard and not the trackpad, which shares the device name.
+- JOB: /usr/bin/intercept -g $DEVNODE | /usr/local/bin/key-debounce 30 | /usr/bin/uinput -d $DEVNODE
+  DEVICE:
+    NAME: "Apple Inc. Apple Internal Keyboard / Trackpad"
+    EVENTS:
+      EV_KEY: [KEY_SPACE]
