@@ -65,7 +65,8 @@ The script is safe to re-run. It backs up any config file before changing it (`*
 - **Keyboard chatter filter**: worn butterfly switches register one tap as two presses (double spaces,
   mostly). `interception-tools` runs the built-in keyboard through `files/key-debounce.c`, which drops a
   press arriving within 30 ms of the same key's release. Real double letters are typed much further apart.
-  The threshold is in `files/key-debounce.yaml`. To turn it off: `sudo systemctl disable --now udevmon`.
+  The threshold is in `files/key-debounce.yaml`. Each quick re-press is logged with its gap (not the key);
+  `journalctl -u udevmon -g dropped` shows what it blocked. To turn it off: `sudo systemctl disable --now udevmon`.
 - **Key repeat delay of 400 ms** (Omarchy's default is 250): slow-releasing keys were starting to repeat.
   fcitx5 handles repeat and reads the delay only at startup, so the step restarts it.
 

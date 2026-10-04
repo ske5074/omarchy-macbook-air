@@ -5,7 +5,9 @@
 // key's last release, along with the release that follows it.
 //
 // Usage: intercept -g $DEVNODE | key-debounce [ms] | uinput -d $DEVNODE
-// The threshold defaults to 30 ms.
+// The threshold defaults to 30 ms. Each re-press of a key within 150 ms of its
+// release is logged to stderr (the udevmon journal) with its gap, not the key,
+// to help pick the threshold.
 
 #include <linux/input.h>
 #include <stdio.h>
@@ -26,8 +28,11 @@ int main(int argc, char **argv) {
 
   while (fread(&ev, sizeof ev, 1, stdin) == 1) {
     if (ev.type == EV_KEY && ev.code < KEY_CNT) {
-      if (ev.value == 1 && last_release[ev.code] &&
-          event_ms(&ev) - last_release[ev.code] < threshold) {
+      long long gap = event_ms(&ev) - last_release[ev.code];
+      if (ev.value == 1 && last_release[ev.code] && gap < 150)
+        fprintf(stderr, "key-debounce: %s re-press after %lld ms\n",
+                gap < threshold ? "dropped" : "kept", gap);
+      if (ev.value == 1 && last_release[ev.code] && gap < threshold) {
         dropping[ev.code] = 1;
         continue;
       }
