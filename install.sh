@@ -10,6 +10,14 @@ stamp="$(date +%s)"
 
 step() { printf '\n==> %s\n' "$1"; }
 
+# gcc builds the keyboard filter; patch applies the panel patches.
+step "Installing build tools"
+if pacman -Q gcc patch &>/dev/null; then
+  echo "already installed"
+else
+  sudo pacman -S --needed --noconfirm gcc patch
+fi
+
 # 1. Kate text editor
 step "Installing Kate"
 if pacman -Q kate &>/dev/null; then
@@ -99,6 +107,18 @@ fi
 # 5. Zen browser: hardware video decoding
 # The UHD 617 decodes H.264/HEVC/VP9 but not AV1, so disable AV1 and YouTube
 # falls back to VP9 on the GPU instead of decoding on the CPU.
+step "Installing Zen as the default browser"
+if pacman -Q zen-browser-bin &>/dev/null; then
+  echo "already installed"
+else
+  omarchy install browser zen
+fi
+if [[ $(xdg-settings get default-web-browser 2>/dev/null) == zen.desktop ]]; then
+  echo "already the default browser"
+else
+  omarchy default browser zen
+fi
+
 step "Configuring Zen for hardware video decoding"
 zen_dir="$HOME/.config/zen"
 zen_profile=""
